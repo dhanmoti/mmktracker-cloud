@@ -9,43 +9,6 @@ const firestore = new Firestore({
 	timestampsInSnapshots: true,
 });
 
-// Test decorate the value of "/latest-rates" 
-exports.mmkRates = functions.https.onRequest(async (req, res) => {
-	//TODO: create separate func for below func
-	//fetchCurrenciesCodeMap();
-	try {
-		const latestRatesRef = firestore.collection(COLLECTION_NAME).doc('latest-rates');
-		const latestRates = await latestRatesRef.get();
-		const result = await decorateObj(latestRates.data());
-		const jsonObj = JSON.stringify(result)
-		res.send(jsonObj);
-	} catch (e) {
-		console.log(e);
-		res.json({
-			"error": "Fail to fetch latest-rates"
-		});
-	}
-
-});
-
-exports.onUpdateTrigger = functions.firestore
-	.document("/central-bank-mm/latest-rates")
-	.onUpdate(async (change, eventContext) => {
-		// Data before update and after update
-		const newValue = change.after.data();
-		console.log(newValue);
-		try {
-			const decoratedValue = await decorateObj(newValue);
-			console.log(decoratedValue);
-			updateDecoratedValue(decoratedValue);
-			return null;
-		}
-		catch(e){
-			console.log(e);
-			return null;
-		}
-		
-	});
 
 exports.scheduledFetch = functions.pubsub.schedule("every 5 minutes")
 	.onRun((context) => {
@@ -67,32 +30,16 @@ function fetch() {
 			data.push(chunk);
 		});
 
-		res.on("end", () => {
+		res.on("end", async () => {
 			console.log("Response ended: ");
 			const rates = JSON.parse(Buffer.concat(data).toString());
-			console.log("Rates");
-			console.log(rates);
-			updateLatestRates(rates);
+			const decoratedValue = await decorateObj(rates);
+			console.log(decoratedValue);
+			updateDecoratedValue(decoratedValue);
 		});
 	}).on("error", (err) => {
 		console.log("Error: ", err.message);
 	});
-}
-
-
-/**
-	* Save to firestore collection
-	* @Param {object} rates
-	**/
-function updateLatestRates(rates) {
-	firestore.collection(COLLECTION_NAME)
-		.doc("latest-rates")
-		.update(rates)
-		.then((doc) => {
-			console.info("stored new doc");
-		}).catch((err) => {
-			console.error(err);
-		});
 }
 
 
